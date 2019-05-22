@@ -1309,39 +1309,37 @@ let api = function Binance() {
         * @return {undefined}
         */
         bookTickers: function (symbol, callback) {
-            const params = typeof symbol === 'string' ? '?symbol=' + symbol : '';
-            if (typeof symbol === 'function') callback = symbol; // backwards compatibility
+            return new Promise((resolve, reject) => {
+                const params = typeof symbol === 'string' ? '?symbol=' + symbol : '';
+                if (typeof symbol === 'function') return reject("symbol should not be function."); // backwards compatibility
 
-            let socksproxy = process.env.socks_proxy || false;
+                let socksproxy = process.env.socks_proxy || false;
 
-            let opt = {
-                url: base + 'v3/ticker/bookTicker' + params,
-                timeout: Binance.options.recvWindow
-            };
+                let opt = {
+                    url: base + 'v3/ticker/bookTicker' + params,
+                    timeout: Binance.options.recvWindow
+                };
 
-            if (socksproxy !== false) {
-                socksproxy = proxyReplacewithIp(socksproxy);
-                if (Binance.options.verbose) Binance.options.log('using socks proxy server ' + socksproxy);
-                opt.agentClass = SocksProxyAgent;
-                opt.agentOptions = {
-                    protocol: parseProxy(socksproxy)[0],
-                    host: parseProxy(socksproxy)[1],
-                    port: parseProxy(socksproxy)[2]
+                if (socksproxy !== false) {
+                    socksproxy = proxyReplacewithIp(socksproxy);
+                    if (Binance.options.verbose) Binance.options.log('using socks proxy server ' + socksproxy);
+                    opt.agentClass = SocksProxyAgent;
+                    opt.agentOptions = {
+                        protocol: parseProxy(socksproxy)[0],
+                        host: parseProxy(socksproxy)[1],
+                        port: parseProxy(socksproxy)[2]
+                    }
                 }
-            }
 
-            request(opt, function (error, response, body) {
-                if (!callback) return;
+                request(opt, function (error, response, body) {
+                    if (error) return reject(error);
 
-                if (error) return callback(error);
+                    if (response && response.statusCode !== 200) return reject(response);
 
-                if (response && response.statusCode !== 200) return callback(response);
-
-                if (callback) {
                     const result = symbol ? JSON.parse(body) : bookPriceData(JSON.parse(body));
-                    return callback(null, result);
-                }
-            });
+                    return resolve(result);
+                });
+            })
         },
 
         /**
@@ -1473,10 +1471,16 @@ let api = function Binance() {
         * @param {function} callback - the callback function
         * @return {undefined}
         */
-        balance: function (callback) {
-            signedRequest(base + 'v3/account', {}, function (error, data) {
-                if (callback) callback(error, balanceData(data));
-            });
+        balance: function () {
+            return new Promise((resolve, reject) => {
+                signedRequest(base + 'v3/account', {}, function (error, data) {
+                    if (error) {
+                        reject(error);
+                    } else {
+                        resolve(balanceData(data));
+                    }
+                });
+            })
         },
 
         /**
